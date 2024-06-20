@@ -168,7 +168,15 @@ cb_have_data (GstPad          *pad,
 
   buffer = GST_PAD_PROBE_INFO_BUFFER (info);
 
-  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
+  buffer = gst_buffer_make_writable (buffer);
+
+  /* Making a buffer writable can fail (for example if it
+   * cannot be copied and is used more than once)
+   */
+  if (buffer == NULL)
+    return GST_PAD_PROBE_OK;
+
+  if (gst_buffer_map (buffer, &map, GST_MAP_WRITE)) {
     ptr = (guint8 *) map.data;
     int slnc = 1, slncf = 1;
     for (int i = 0; i < map.size; ++i) {
@@ -176,6 +184,8 @@ cb_have_data (GstPad          *pad,
 		    slnc = 0;
 	    if (ptr[i] != 0xff)
 		    slncf = 0;
+	    if (i)
+		    ptr[i - 1] = ptr[i - 1] ^ ptr[i];
     }
     if (slnc || slncf) {
 	    GMainLoop *loop = (GMainLoop *) user_data;
