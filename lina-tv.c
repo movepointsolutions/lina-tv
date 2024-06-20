@@ -156,6 +156,41 @@ static void print_pad_capabilities (GstElement *element, gchar *pad_name) {
   gst_object_unref (pad);
 }
 
+static GstPadProbeReturn
+cb_have_data (GstPad          *pad,
+              GstPadProbeInfo *info,
+              gpointer         user_data)
+{
+  gint x, y;
+  GstMapInfo map;
+  guint8 *ptr;
+  GstBuffer *buffer;
+
+  buffer = GST_PAD_PROBE_INFO_BUFFER (info);
+
+  if (gst_buffer_map (buffer, &map, GST_MAP_READ)) {
+    ptr = (guint8 *) map.data;
+    int slnc = 1, slncf = 1;
+    for (int i = 0; i < map.size; ++i) {
+	    if (ptr[i])
+		    slnc = 0;
+	    if (ptr[i] != 0xff)
+		    slncf = 0;
+    }
+    if (slnc || slncf) {
+	    GMainLoop *loop = (GMainLoop *) user_data;
+	    g_print ("Silence\n");
+	    g_main_loop_quit (loop);
+    } else
+	    g_print("Sound\n");
+    gst_buffer_unmap (buffer, &map);
+  }
+
+  GST_PAD_PROBE_INFO_DATA (info) = buffer;
+
+  return GST_PAD_PROBE_OK;
+}
+
 int
 main (int   argc,
       char *argv[])
@@ -208,6 +243,7 @@ main (int   argc,
 
   /* we set the input filename to the source element */
   g_object_set (G_OBJECT (a_source), "location", "lina-tv.rgba", NULL);
+  g_object_set (G_OBJECT (a_source), "blocksize", 1024, NULL);
   g_object_set (G_OBJECT (v_source), "location", "lina-tv.webm", NULL);
 
   /* we add a message handler */
@@ -223,6 +259,9 @@ main (int   argc,
                     v_source, v_demux, v_dec, v_freeze, v_sink, NULL);
 
   //print_pad_capabilities(v_sink, "sink");
+  GstPad *pad = gst_element_get_static_pad (a_source, "src");
+  gst_pad_add_probe (pad, GST_PAD_PROBE_TYPE_BUFFER,
+      (GstPadProbeCallback) cb_have_data, loop, NULL);
 
   /* we link the elements together */
   /* file-source -> ogg-demuxer ~> vorbis-decoder -> converter -> alsa-output */
