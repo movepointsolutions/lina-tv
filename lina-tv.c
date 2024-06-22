@@ -201,51 +201,43 @@ cb_have_data (GstPad          *pad,
   return GST_PAD_PROBE_OK;
 }
 
-int
-main (int   argc,
-      char *argv[])
-{
+struct Context {
   GMainLoop *loop;
-
   GstElement *a_pipeline, *v_pipeline, *a_source;
   GstElement *i_source, *i_dec, *i_convert, *i_freeze;
   GstElement *a_sink, *v_sink;
-  GstBus *bus;
   GstCaps *v_caps, *a_caps;
-  guint bus_watch_id;
+};
 
-  /* Initialisation */
-  gst_init (&argc, &argv);
-
-  loop = g_main_loop_new (NULL, FALSE);
-
-
-  /*v_caps = gst_caps_new_simple ("video/x-raw",
+int init_ctx(struct Context *ctx)
+{
+  ctx->loop = g_main_loop_new (NULL, FALSE);
+  ctx->v_caps = gst_caps_new_simple ("video/x-raw",
 		  "format", G_TYPE_STRING, "RGBA",
 		  "width", G_TYPE_INT, 800,
 		  "height", G_TYPE_INT, 1048,
-		  NULL);*/
-  a_caps = gst_caps_new_simple ("audio/x-raw",
+		  NULL);
+  ctx->a_caps = gst_caps_new_simple ("audio/x-raw",
 		  "format", G_TYPE_STRING, "U8",
 		  "channels", G_TYPE_INT, 2,
 		  "rate", G_TYPE_INT, 48000,
 		  NULL);
 
   /* Create gstreamer elements */
-  a_pipeline = gst_pipeline_new ("audio-player");
-  v_pipeline = gst_pipeline_new ("video-player");
-  a_source = gst_element_factory_make ("filesrc",       "audio-source");
-  i_source = gst_element_factory_make ("filesrc",       "image-source");
-  i_dec    = gst_element_factory_make ("pngdec",        "image-decode");
-  i_convert = gst_element_factory_make ("videoconvert", "video-convert");
-  i_freeze = gst_element_factory_make ("imagefreeze",   "video-freeze");
-  a_sink   = gst_element_factory_make ("autoaudiosink", "audio-output");
-  v_sink   = gst_element_factory_make ("autovideosink", "video-output");
+  ctx->a_pipeline = gst_pipeline_new ("audio-player");
+  ctx->v_pipeline = gst_pipeline_new ("video-player");
+  ctx->a_source = gst_element_factory_make ("filesrc",       "audio-source");
+  ctx->i_source = gst_element_factory_make ("filesrc",       "image-source");
+  ctx->i_dec    = gst_element_factory_make ("pngdec",        "image-decode");
+  ctx->i_convert = gst_element_factory_make ("videoconvert", "video-convert");
+  ctx->i_freeze = gst_element_factory_make ("imagefreeze",   "video-freeze");
+  ctx->a_sink   = gst_element_factory_make ("autoaudiosink", "audio-output");
+  ctx->v_sink   = gst_element_factory_make ("autovideosink", "video-output");
 
 
-  if (!a_pipeline || !v_pipeline || !a_source
-		  || !i_source || !i_dec || !i_freeze
-		  || !a_sink || !v_sink) {
+  if (!ctx->a_pipeline || !ctx->v_pipeline || !ctx->a_source
+		  || !ctx->i_source || !ctx->i_dec || !ctx->i_freeze
+		  || !ctx->a_sink || !ctx->v_sink) {
     g_printerr ("One element could not be created. Exiting.\n");
     return -1;
   }
@@ -253,67 +245,76 @@ main (int   argc,
   /* Set up the pipeline */
 
   /* we set the input filename to the source element */
-  g_object_set (G_OBJECT (a_source), "location", "lina-tv.rgba", NULL);
-  g_object_set (G_OBJECT (a_source), "blocksize", 1024, NULL);
+  g_object_set (G_OBJECT (ctx->a_source), "location", "lina-tv.rgba", NULL);
+  g_object_set (G_OBJECT (ctx->a_source), "blocksize", 1024, NULL);
   //g_object_set (G_OBJECT (v_source), "location", "lina-tv.webm", NULL);
-  g_object_set (G_OBJECT (i_source), "location", "lina-tv.png", NULL);
-
-  /* we add a message handler */
-  bus = gst_pipeline_get_bus (GST_PIPELINE (v_pipeline));
-  bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
-  gst_object_unref (bus);
+  g_object_set (G_OBJECT (ctx->i_source), "location", "lina-tv.png", NULL);
 
   /* we add all elements into the pipeline */
   /* file-source | ogg-demuxer | vorbis-decoder | converter | alsa-output */
-  gst_bin_add_many (GST_BIN (a_pipeline),
-                    a_source, a_sink, NULL);
-  gst_bin_add_many (GST_BIN (v_pipeline),
-                    i_source, i_dec, i_convert, i_freeze, v_sink, NULL);
+  gst_bin_add_many (GST_BIN (ctx->a_pipeline),
+                    ctx->a_source, ctx->a_sink, NULL);
+  gst_bin_add_many (GST_BIN (ctx->v_pipeline),
+                    ctx->i_source, ctx->i_dec, ctx->i_convert,
+		    ctx->i_freeze, ctx->v_sink, NULL);
   //gst_bin_add_many (GST_BIN (v_pipeline),
   //                  v_source, v_demux, v_dec, v_sink, NULL);
 
   //print_pad_capabilities(v_sink, "sink");
-  GstPad *pad = gst_element_get_static_pad (a_source, "src");
+  GstPad *pad = gst_element_get_static_pad (ctx->a_source, "src");
   gst_pad_add_probe (pad, GST_PAD_PROBE_TYPE_BUFFER,
-      (GstPadProbeCallback) cb_have_data, loop, NULL);
+      (GstPadProbeCallback) cb_have_data, ctx->loop, NULL);
 
   /* we link the elements together */
   /* file-source -> ogg-demuxer ~> vorbis-decoder -> converter -> alsa-output */
-  gst_element_link_filtered (a_source, a_sink, a_caps);
+  gst_element_link_filtered (ctx->a_source, ctx->a_sink, ctx->a_caps);
   /*g_signal_connect (v_demux, "pad-added", G_CALLBACK (on_pad_added), v_dec);
   gst_element_link_many (v_source, v_demux, NULL);
   gst_element_link_many (v_dec, v_sink, NULL);*/
-  gst_element_link_many (i_source, i_dec, i_convert, i_freeze, v_sink, NULL);
+  gst_element_link_many (ctx->i_source, ctx->i_dec, ctx->i_convert,
+		         ctx->i_freeze, ctx->v_sink, NULL);
+  return 0;
+}
 
-  /* note that the demuxer will be linked to the decoder dynamically.
-     The reason is that Ogg may contain various streams (for example
-     audio and video). The source pad(s) will be created at run time,
-     by the demuxer when it detects the amount and nature of streams.
-     Therefore we connect a callback function which will be executed
-     when the "pad-added" is emitted.*/
+int
+main (int   argc,
+      char *argv[])
+{
+  gst_init (&argc, &argv);
+
+  struct Context ctx;
+  if (init_ctx(&ctx))
+	  return -1;
+
+  GstBus *bus;
+  guint bus_watch_id;
+  /* we add a message handler */
+  bus = gst_pipeline_get_bus (GST_PIPELINE (ctx.v_pipeline));
+  bus_watch_id = gst_bus_add_watch (bus, bus_call, ctx.loop);
+  gst_object_unref (bus);
 
 
   /* Set the pipeline to "playing" state*/
   g_print ("Now playing.\n");
-  gst_element_set_state (a_pipeline, GST_STATE_PLAYING);
-  gst_element_set_state (v_pipeline, GST_STATE_PLAYING);
+  gst_element_set_state (ctx.a_pipeline, GST_STATE_PLAYING);
+  gst_element_set_state (ctx.v_pipeline, GST_STATE_PLAYING);
 
 
   /* Iterate */
   g_print ("Running...\n");
-  g_main_loop_run (loop);
+  g_main_loop_run (ctx.loop);
 
 
   /* Out of the main loop, clean up nicely */
   g_print ("Returned, stopping playback\n");
-  gst_element_set_state (a_pipeline, GST_STATE_NULL);
-  gst_element_set_state (v_pipeline, GST_STATE_NULL);
+  gst_element_set_state (ctx.a_pipeline, GST_STATE_NULL);
+  gst_element_set_state (ctx.v_pipeline, GST_STATE_NULL);
 
   g_print ("Deleting pipeline\n");
-  gst_object_unref (GST_OBJECT (a_pipeline));
-  gst_object_unref (GST_OBJECT (v_pipeline));
+  gst_object_unref (GST_OBJECT (ctx.a_pipeline));
+  gst_object_unref (GST_OBJECT (ctx.v_pipeline));
   g_source_remove (bus_watch_id);
-  g_main_loop_unref (loop);
+  g_main_loop_unref (ctx.loop);
 
   return 0;
 }
