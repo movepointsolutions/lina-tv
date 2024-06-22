@@ -207,8 +207,9 @@ main (int   argc,
 {
   GMainLoop *loop;
 
-  GstElement *a_pipeline, *v_pipeline, *a_source, *v_source;
-  GstElement *v_demux, *v_dec, *v_freeze, *a_sink, *v_sink;
+  GstElement *a_pipeline, *v_pipeline, *a_source;
+  GstElement *i_source, *i_dec, *i_convert, *i_freeze;
+  GstElement *a_sink, *v_sink;
   GstBus *bus;
   GstCaps *v_caps, *a_caps;
   guint bus_watch_id;
@@ -223,9 +224,7 @@ main (int   argc,
 		  "format", G_TYPE_STRING, "RGBA",
 		  "width", G_TYPE_INT, 800,
 		  "height", G_TYPE_INT, 1048,
-		  "framerate", GST_TYPE_FRACTION, 25, 1,
-		  NULL);
-		  */
+		  NULL);*/
   a_caps = gst_caps_new_simple ("audio/x-raw",
 		  "format", G_TYPE_STRING, "U8",
 		  "channels", G_TYPE_INT, 2,
@@ -236,15 +235,17 @@ main (int   argc,
   a_pipeline = gst_pipeline_new ("audio-player");
   v_pipeline = gst_pipeline_new ("video-player");
   a_source = gst_element_factory_make ("filesrc",       "audio-source");
-  v_source = gst_element_factory_make ("filesrc",       "video-source");
-  v_demux  = gst_element_factory_make ("matroskademux", "video-demux");
-  v_dec    = gst_element_factory_make ("vp9dec",        "video-decode");
-  v_freeze = gst_element_factory_make ("imagefreeze",   "video-freeze");
+  i_source = gst_element_factory_make ("filesrc",       "image-source");
+  i_dec    = gst_element_factory_make ("pngdec",        "image-decode");
+  i_convert = gst_element_factory_make ("videoconvert", "video-convert");
+  i_freeze = gst_element_factory_make ("imagefreeze",   "video-freeze");
   a_sink   = gst_element_factory_make ("autoaudiosink", "audio-output");
   v_sink   = gst_element_factory_make ("autovideosink", "video-output");
 
-  if (!a_pipeline || !v_pipeline || !a_source || !v_source
-		  || !v_demux || !v_dec || !v_freeze || !a_sink || !v_sink) {
+
+  if (!a_pipeline || !v_pipeline || !a_source
+		  || !i_source || !i_dec || !i_freeze
+		  || !a_sink || !v_sink) {
     g_printerr ("One element could not be created. Exiting.\n");
     return -1;
   }
@@ -254,10 +255,11 @@ main (int   argc,
   /* we set the input filename to the source element */
   g_object_set (G_OBJECT (a_source), "location", "lina-tv.rgba", NULL);
   g_object_set (G_OBJECT (a_source), "blocksize", 1024, NULL);
-  g_object_set (G_OBJECT (v_source), "location", "lina-tv.webm", NULL);
+  //g_object_set (G_OBJECT (v_source), "location", "lina-tv.webm", NULL);
+  g_object_set (G_OBJECT (i_source), "location", "lina-tv.png", NULL);
 
   /* we add a message handler */
-  bus = gst_pipeline_get_bus (GST_PIPELINE (a_pipeline));
+  bus = gst_pipeline_get_bus (GST_PIPELINE (v_pipeline));
   bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
   gst_object_unref (bus);
 
@@ -265,8 +267,10 @@ main (int   argc,
   /* file-source | ogg-demuxer | vorbis-decoder | converter | alsa-output */
   gst_bin_add_many (GST_BIN (a_pipeline),
                     a_source, a_sink, NULL);
-  gst_bin_add_many (GST_BIN (a_pipeline),
-                    v_source, v_demux, v_dec, v_freeze, v_sink, NULL);
+  gst_bin_add_many (GST_BIN (v_pipeline),
+                    i_source, i_dec, i_convert, i_freeze, v_sink, NULL);
+  //gst_bin_add_many (GST_BIN (v_pipeline),
+  //                  v_source, v_demux, v_dec, v_sink, NULL);
 
   //print_pad_capabilities(v_sink, "sink");
   GstPad *pad = gst_element_get_static_pad (a_source, "src");
@@ -276,9 +280,10 @@ main (int   argc,
   /* we link the elements together */
   /* file-source -> ogg-demuxer ~> vorbis-decoder -> converter -> alsa-output */
   gst_element_link_filtered (a_source, a_sink, a_caps);
-  g_signal_connect (v_demux, "pad-added", G_CALLBACK (on_pad_added), v_dec);
+  /*g_signal_connect (v_demux, "pad-added", G_CALLBACK (on_pad_added), v_dec);
   gst_element_link_many (v_source, v_demux, NULL);
-  gst_element_link_many (v_dec, v_sink, NULL);
+  gst_element_link_many (v_dec, v_sink, NULL);*/
+  gst_element_link_many (i_source, i_dec, i_convert, i_freeze, v_sink, NULL);
 
   /* note that the demuxer will be linked to the decoder dynamically.
      The reason is that Ogg may contain various streams (for example
@@ -291,7 +296,7 @@ main (int   argc,
   /* Set the pipeline to "playing" state*/
   g_print ("Now playing.\n");
   gst_element_set_state (a_pipeline, GST_STATE_PLAYING);
-  //gst_element_set_state (a_pipeline, GST_STATE_PLAYING);
+  gst_element_set_state (v_pipeline, GST_STATE_PLAYING);
 
 
   /* Iterate */
@@ -302,7 +307,7 @@ main (int   argc,
   /* Out of the main loop, clean up nicely */
   g_print ("Returned, stopping playback\n");
   gst_element_set_state (a_pipeline, GST_STATE_NULL);
-  gst_element_set_state (a_pipeline, GST_STATE_NULL);
+  gst_element_set_state (v_pipeline, GST_STATE_NULL);
 
   g_print ("Deleting pipeline\n");
   gst_object_unref (GST_OBJECT (a_pipeline));
