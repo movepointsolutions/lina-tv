@@ -177,17 +177,20 @@ cb_have_data (GstPad          *pad,
     return GST_PAD_PROBE_OK;
 
   if (gst_buffer_map (buffer, &map, GST_MAP_WRITE)) {
+    int detect_silence = 1;
+    int xor_bytes = 1;
     ptr = (guint8 *) map.data;
     int slnc = 1, slncf = 1;
+    //g_print("Buffer: %lu\n", map.size);
     for (int i = 0; i < map.size; ++i) {
 	    if (ptr[i])
 		    slnc = 0;
 	    if (ptr[i] != 0xff)
 		    slncf = 0;
-	    if (i)
+	    if (xor_bytes && i)
 		    ptr[i - 1] = ptr[i - 1] ^ ptr[i];
     }
-    if (slnc || slncf) {
+    if (detect_silence && (slnc || slncf)) {
 	    GMainLoop *loop = (GMainLoop *) user_data;
 	    g_print ("Silence\n");
 	    g_main_loop_quit (loop);
@@ -218,7 +221,7 @@ int init_ctx(struct Context *ctx)
 		  "height", G_TYPE_INT, 1048,
 		  NULL);
   ctx->a_caps = gst_caps_new_simple ("audio/x-raw",
-		  "format", G_TYPE_STRING, "U8",
+		  "format", G_TYPE_STRING, "S16BE",
 		  "channels", G_TYPE_INT, 2,
 		  "rate", G_TYPE_INT, 48000,
 		  NULL);
@@ -246,7 +249,7 @@ int init_ctx(struct Context *ctx)
 
   /* we set the input filename to the source element */
   g_object_set (G_OBJECT (ctx->a_source), "location", "lina-tv.rgba", NULL);
-  g_object_set (G_OBJECT (ctx->a_source), "blocksize", 1024, NULL);
+  g_object_set (G_OBJECT (ctx->a_source), "blocksize", 4096, NULL);
   //g_object_set (G_OBJECT (v_source), "location", "lina-tv.webm", NULL);
   g_object_set (G_OBJECT (ctx->i_source), "location", "lina-tv.png", NULL);
 
@@ -289,7 +292,7 @@ main (int   argc,
   GstBus *bus;
   guint bus_watch_id;
   /* we add a message handler */
-  bus = gst_pipeline_get_bus (GST_PIPELINE (ctx.v_pipeline));
+  bus = gst_pipeline_get_bus (GST_PIPELINE (ctx.a_pipeline));
   bus_watch_id = gst_bus_add_watch (bus, bus_call, ctx.loop);
   gst_object_unref (bus);
 
