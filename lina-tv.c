@@ -59,17 +59,18 @@ cb_have_data (GstPad          *pad,
 
   if (gst_buffer_map (buffer, &map, GST_MAP_WRITE)) {
     int detect_silence = 1;
-    int xor_bytes = 1;
     ptr = (guint8 *) map.data;
     int slnc = 1, slncf = 1;
     //g_print("Buffer: %lu\n", map.size);
+    const double coeff = 0.08715574275;
+    guint8 acc = 0;
     for (int i = 0; i < map.size; ++i) {
 	    if (ptr[i])
 		    slnc = 0;
 	    if (ptr[i] != 0xff)
 		    slncf = 0;
-	    if (xor_bytes && i)
-		    ptr[i - 1] = ptr[i - 1] ^ ptr[i];
+	    acc += ptr[i] * coeff;
+	    ptr[i] = acc;
     }
     if (detect_silence && (slnc || slncf)) {
 	    GMainLoop *loop = (GMainLoop *) user_data;
