@@ -63,14 +63,14 @@ cb_have_data (GstPad          *pad,
     int slnc = 1, slncf = 1;
     //g_print("Buffer: %lu\n", map.size);
     const double coeff = 0.08715574275;
-    guint8 acc = 0;
+    double acc = 0;
     for (int i = 0; i < map.size; ++i) {
 	    if (ptr[i])
 		    slnc = 0;
 	    if (ptr[i] != 0xff)
 		    slncf = 0;
 	    acc += ptr[i] * coeff;
-	    ptr[i] = acc;
+	    ptr[i] = (guint8)acc;
     }
     if (detect_silence && (slnc || slncf)) {
 	    GMainLoop *loop = (GMainLoop *) user_data;
