@@ -62,7 +62,8 @@ cb_have_data (GstPad          *pad,
     ptr = (guint8 *) map.data;
     int slnc = 1, slncf = 1;
     //g_print("Buffer: %lu\n", map.size);
-    const double coeff = 0.08715574275;
+    //const double coeff = 0.08715574275;
+    const double coeff = 0.25;
     double acc = 0;
     const double volume = 0.9;
     for (int i = 0; i < map.size; ++i) {
