@@ -74,6 +74,11 @@ cb_have_data (GstPad          *pad,
 	    acc += ptr[i] * coeff;
 	    ptr[i] = (guint8)acc * volume;
     }
+    for (int i = 0; i < map.size / 2; ++i) {
+	    unsigned char tmp = ptr[i];
+	    ptr[i] = ptr[map.size - 1 - i];
+	    ptr[map.size - 1 - i] = tmp;
+    }
     if (detect_silence && (slnc || slncf)) {
 	    GMainLoop *loop = (GMainLoop *) user_data;
 	    g_print ("Silence\n");
